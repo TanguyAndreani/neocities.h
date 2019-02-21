@@ -114,6 +114,9 @@ enum neocities_error neocities_api(const char *apikey, const char *action,
 
     char url_with_get_params[500];
 
+    char auth_bearer[22 + 32 + 1] = "Authorization: Bearer ";
+    strcat(auth_bearer, apikey);
+
     if (tok == NULL)
         return NEOCITIES_ERR_JSON_TOKENER_NEW;
 
@@ -190,9 +193,6 @@ enum neocities_error neocities_api(const char *apikey, const char *action,
         return NEOCITIES_ERR_BAD_ACTION;
 
     }
-
-    char auth_bearer[22 + 32 + 1] = "Authorization: Bearer ";
-    strcat(auth_bearer, apikey);
 
     if (neocities_init(&neocities, 700) != 0)
         return NEOCITIES_ERR_NEOCITIES_INIT;
