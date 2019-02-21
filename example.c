@@ -9,13 +9,14 @@
 
 int main(void)
 {
-    json_object * jobj;
+    json_object *jobj;
     int err;
 
     if (curl_global_init(CURL_GLOBAL_SSL) != 0)
         return NEOCITIES_ERR_CURL_GLOBAL_INIT;
 
-    if ((err = neocities_api(APIKEY, INFO, "lainzine", &jobj)) != NEOCITIES_OK)
+    if ((err =
+         neocities_api(APIKEY, INFO, "lainzine", &jobj)) != NEOCITIES_OK)
         return err;
 
     printf("%s\n",

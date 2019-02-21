@@ -35,6 +35,7 @@ enum neocities_error {
 
 typedef struct Neocities_ {
     char *buf;
+
     int size;
     int pos;
 } Neocities;
