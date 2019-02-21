@@ -3,29 +3,24 @@
 #include <string.h>
 
 #include <curl/curl.h>
-#include <json-c/json.h>
+#include <json.h>
 
 #include "neocities.h"
 
 int main(void)
 {
-    json_object *obj = NULL;
+    json_object * jobj;
+    int err;
 
-    curl_global_init(CURL_GLOBAL_SSL);
+    if (curl_global_init(CURL_GLOBAL_SSL) != 0)
+        return NEOCITIES_ERR_CURL_GLOBAL_INIT;
 
+    if ((err = neocities_api(APIKEY, INFO, "lainzine", &jobj)) != NEOCITIES_OK)
+        return err;
 
-//  obj = neocities_api(APIKEY, INFO, "lainzine");
-    obj = neocities_api(APIKEY, INFO, "");
     printf("%s\n",
-           json_object_to_json_string_ext(obj, JSON_C_TO_STRING_PRETTY));
-    json_object_put(obj);
-
-
-    obj = neocities_api(APIKEY, UPLOAD, "neocities.h");
-    printf("%s\n",
-           json_object_to_json_string_ext(obj, JSON_C_TO_STRING_PRETTY));
-    json_object_put(obj);
-
+           json_object_to_json_string_ext(jobj, JSON_C_TO_STRING_PRETTY));
+    // fflush(stdout);
 
     curl_global_cleanup();
 
