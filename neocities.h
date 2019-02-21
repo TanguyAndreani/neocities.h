@@ -223,7 +223,9 @@ enum neocities_error neocities_api(const char *apikey, const char *action,
     *obj =
         json_tokener_parse_ex(tok, (char *) neocities.buf, neocities.pos);
 
+#ifdef NEOCITIES_DEBUG
     neocities_dump(&neocities);
+#endif
     neocities_destroy(&neocities);
 
     if (*obj == NULL)
