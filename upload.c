@@ -21,7 +21,14 @@ int main(int argc, char *argv[])
     char date[33] = { 0 };
 
     if (argc != 2) {
-        fprintf(stderr, "Usage: %s filename\n", argv[0]);
+        /* ./dir/file is valid
+           ./some-utf8-character/file is valid
+           ./dir/some-utf8-character is invalid
+
+           after the last /, filename should be [a-zA-Z\.]+
+         */
+
+        fprintf(stderr, "Usage: %s filename\n\n", argv[0]);
         exit(200);              // no enum member share this number
     }
 
