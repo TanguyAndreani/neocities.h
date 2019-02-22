@@ -14,4 +14,4 @@ upload: upload.c neocities.h dtparser.c dtparser.h
 	$(CC) -o $(<:.c=) dtparser.c $< $(FLAGS) $(DEBUG)
 
 clean:
-	rm info list example
+	rm -f info list upload

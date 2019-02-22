@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
         return CURL_ERROR;
 
     if ((err =
-         neocities_api_ex(APIKEY, LIST, (argc == 2) ? argv[1] : "",
+         neocities_api_ex(APIKEY, list, (argc == 2) ? argv[1] : "",
                           &res)) != OK)
         return err;
 
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
         putchar('\n');
     }
 
-    neocities_destroy_list(&res);
+    neocities_destroy(&res);
 
     curl_global_cleanup();
 

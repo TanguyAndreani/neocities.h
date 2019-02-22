@@ -28,8 +28,10 @@ int main(int argc, char *argv[])
     if (curl_global_init(CURL_GLOBAL_SSL) != 0)
         return CURL_ERROR;
 
-    if ((err = neocities_api_ex(APIKEY, UPLOAD, argv[1], &res)) != OK)
+    if ((err = neocities_api_ex(APIKEY, upload, argv[1], &res)) != OK)
         return err;
+
+    // neocities_destroy(&res);
 
     curl_global_cleanup();
 

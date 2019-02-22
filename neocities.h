@@ -14,6 +14,14 @@
 #define INFO BASEURL "info"
 #define KEY  BASEURL "key"
 
+enum neocities_action {
+    upload,
+    delete,
+    list,
+    info,
+    key
+};
+
 enum neocities_low_level_error {
     NEOCITIES_LLVL_OK,
     NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT,
@@ -34,7 +42,14 @@ enum neocities_low_level_error {
     NEOCITIES_LLVL_ERR_RECEIVED_UNSUPPORTED_JSON,
     NEOCITIES_LLVL_ERR_RECEIVED_INVALID_JSON,
     NEOCITIES_LLVL_ERR_NO_SUCCESS,
-    NEOCITIES_LLVL_ERR_MALLOC_FAIL
+    NEOCITIES_LLVL_ERR_MALLOC_FAIL,
+    NEOCITIES_LLVL_ERR_EXPECTED_STRING,
+    NEOCITIES_LLVL_ERR_EXPECTED_BOOL,
+    NEOCITIES_LLVL_ERR_EXPECTED_INT,
+    NEOCITIES_LLVL_ERR_EXPECTED_ARRAY,
+    NEOCITIES_LLVL_ERR_EXPECTED_STRING_OR_NULL,
+    NEOCITIES_LLVL_ERR_EXPECTED_OBJECT,
+    NEOCITIES_LLVL_ERR_RECEIVED_SOMETHING_ELSE
 };
 
 /* Not prefixed for convenience */
@@ -43,12 +58,12 @@ enum neocities_api_level_error {
     UNSUPPORTED_ERROR
 };
 
-typedef struct Neocities_ {
+typedef struct curl_buffer_ {
     char *buf;
 
     int size;
     int pos;
-} Neocities;
+} curl_buffer;
 
 struct neocities_info_ {
     char *sitename;             /* default: NULL */
@@ -78,8 +93,16 @@ struct neocities_error_ {
     int type;
 };
 
+enum neocities_res_data {
+    NEOCITIES_NO_TYPE_YET,
+    NEOCITIES_INFO_STRUCT,
+    NEOCITIES_LIST_STRUCT,
+    NEOCITIES_ERROR_STRUCT
+};
+
 typedef struct neocities_res_ {
     int result;
+    enum neocities_res_data type;
 
     union {
         struct neocities_list_ list;
@@ -88,43 +111,36 @@ typedef struct neocities_res_ {
     } data;
 } neocities_res;
 
-enum neocities_res_data {
-    NEOCITIES_NO_TYPE_YET,
-    NEOCITIES_INFO_STRUCT,
-    NEOCITIES_LIST_STRUCT,
-    NEOCITIES_ERROR_STRUCT
-};
-
-int neocities_init(Neocities * neocities, size_t size)
+int curl_buffer_init(curl_buffer * curl_buf, size_t size)
 {
-    neocities->buf = malloc(sizeof(char) * size);
+    curl_buf->buf = malloc(sizeof(char) * size);
 
-    if (neocities->buf == NULL)
+    if (curl_buf->buf == NULL)
         return 1;
 
-    neocities->size = size;
-    neocities->pos = 0;
+    curl_buf->size = size;
+    curl_buf->pos = 0;
 
     return 0;
 }
 
-void neocities_destroy(Neocities * neocities)
+void curl_buffer_destroy(curl_buffer * curl_buf)
 {
-    free(neocities->buf);
-    neocities->buf = NULL;
+    free(curl_buf->buf);
+    curl_buf->buf = NULL;
 
-    neocities->size = 0;
-    neocities->pos = 0;
+    curl_buf->size = 0;
+    curl_buf->pos = 0;
 
     return;
 }
 
-void neocities_dump(Neocities * neocities)
+void curl_buffer_dump(curl_buffer * curl_buf)
 {
     int i = 0;
 
-    while (i < neocities->pos) {
-        fputc(neocities->buf[i], stderr);
+    while (i < curl_buf->pos) {
+        fputc(curl_buf->buf[i], stderr);
         i++;
     }
 
@@ -132,26 +148,26 @@ void neocities_dump(Neocities * neocities)
 }
 
 size_t write_data(void *buffer, size_t size, size_t nmemb,
-                  Neocities * neocities)
+                  curl_buffer * curl_buf)
 {
     int i = 0;
     while (i < nmemb) {
 
-        if (neocities->pos >= neocities->size) {
+        if (curl_buf->pos >= curl_buf->size) {
 
-            neocities->size += nmemb;
+            curl_buf->size += nmemb;
 
-            neocities->buf =
-                realloc(neocities->buf, sizeof(char) * neocities->size);
+            curl_buf->buf =
+                realloc(curl_buf->buf, sizeof(char) * curl_buf->size);
 
-            if (neocities->buf == NULL)
-                return neocities->size;
+            if (curl_buf->buf == NULL)
+                return curl_buf->size;
 
         }
 
-        neocities->buf[neocities->pos] = *(char *) (buffer + i);
+        curl_buf->buf[curl_buf->pos] = *(char *) (buffer + i);
 
-        (neocities->pos)++;
+        (curl_buf->pos)++;
         i++;
     }
 
@@ -159,11 +175,11 @@ size_t write_data(void *buffer, size_t size, size_t nmemb,
 }
 
 enum neocities_low_level_error neocities_api(const char *apikey,
-                                             const char *action,
+                                             enum neocities_action action,
                                              const char *params,
                                              json_object ** jobj)
 {
-    Neocities neocities;
+    curl_buffer curl_buf;
 
     struct curl_slist *headers = NULL;
 
@@ -187,7 +203,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     if (curl == NULL)
         return NEOCITIES_LLVL_ERR_CURL_EASY_INIT;
 
-    if (action != NULL && strcmp(action, UPLOAD) == 0) {
+    if (action == upload) {
 
         form = curl_mime_init(curl);
 
@@ -227,26 +243,34 @@ enum neocities_low_level_error neocities_api(const char *apikey,
         if (curl_easy_setopt(curl, CURLOPT_MIMEPOST, form) != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
-        if (curl_easy_setopt(curl, CURLOPT_URL, action) != CURLE_OK)
+        if (curl_easy_setopt(curl, CURLOPT_URL, UPLOAD) != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
-    } else if (action != NULL && strcmp(action, DELETE) == 0) {
+    } else if (action == delete) {
 
         return NEOCITIES_LLVL_ERR_UNSUPPORTED_DELETE;
 
-    } else if (action != NULL
-               && (strcmp(action, INFO) == 0 || strcmp(action, LIST) == 0
-                   || strcmp(action, KEY) == 0)) {
+    } else if (action == info || action == list || action == key) {
 
-        strcpy(&url_with_get_params[0], action);
+        memset(&url_with_get_params[0], '\0', 500);
 
-        if (strcmp(action, INFO) == 0 && strcmp(params, "") != 0)
+        if (action == key) {
 
-            strcat(url_with_get_params, "?sitename=");
+            strcpy(&url_with_get_params[0], KEY);
 
-        else if (strcmp(action, LIST) == 0 && strcmp(params, "") != 0)
+        } else if (action == info) {
 
-            strcat(url_with_get_params, "?path=");
+            strcpy(&url_with_get_params[0], INFO);
+            if (strcmp(params, "") != 0)
+                strcat(url_with_get_params, "?sitename=");
+
+        } else if (action == list) {
+
+            strcpy(&url_with_get_params[0], LIST);
+            if (strcmp(params, "") != 0)
+                strcat(url_with_get_params, "?path=");
+
+        }
 
         strcat(url_with_get_params, params);
 
@@ -260,7 +284,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
 
     }
 
-    if (neocities_init(&neocities, 700) != 0)
+    if (curl_buffer_init(&curl_buf, 700) != 0)
         return NEOCITIES_LLVL_ERR_NEOCITIES_INIT;
 
     headers = curl_slist_append(headers, auth_bearer);
@@ -276,7 +300,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
         return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
     if (curl_easy_setopt
-        (curl, CURLOPT_WRITEDATA, ((Neocities *) & neocities)))
+        (curl, CURLOPT_WRITEDATA, ((curl_buffer *) & curl_buf)))
         return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
     if (curl_easy_perform(curl) != CURLE_OK)
@@ -287,10 +311,10 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     curl_easy_cleanup(curl);
 
     *jobj =
-        json_tokener_parse_ex(tok, (char *) neocities.buf, neocities.pos);
+        json_tokener_parse_ex(tok, (char *) curl_buf.buf, curl_buf.pos);
 
     /* https://groups.google.com/forum/#!topic/json-c/CMvkXKXqtWs */
-    if (tok->char_offset != neocities.pos) {
+    if (tok->char_offset != curl_buf.pos) {
         json_tokener_free(tok);
         return NEOCITIES_LLVL_ERR_RECEIVED_INVALID_JSON;
     }
@@ -298,9 +322,9 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     json_tokener_free(tok);
 
 #ifdef NEOCITIES_DEBUG
-    neocities_dump(&neocities);
+    curl_buffer_dump(&curl_buf);
 #endif
-    neocities_destroy(&neocities);
+    curl_buffer_destroy(&curl_buf);
 
     if (*jobj == NULL)
         return NEOCITIES_LLVL_ERR_JSON_TOKENER_PARSE;
@@ -349,6 +373,28 @@ void neocities_destroy_error(neocities_res * res)
     return;
 }
 
+void neocities_destroy(neocities_res * res)
+{
+
+    switch (res->type) {
+    case NEOCITIES_NO_TYPE_YET:
+        break;
+    case NEOCITIES_INFO_STRUCT:
+        neocities_destroy_info(res);
+        break;
+    case NEOCITIES_LIST_STRUCT:
+        neocities_destroy_list(res);
+        break;
+    case NEOCITIES_ERROR_STRUCT:
+        neocities_destroy_error(res);
+        break;
+    }
+
+    res->type = NEOCITIES_NO_TYPE_YET;
+
+    return;
+}
+
 enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                                                         neocities_res *
                                                         res)
@@ -364,24 +410,24 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
     array_list *tmp_array = NULL;
     json_object *tmp_object = NULL;
 
-    enum neocities_res_data current_type = NEOCITIES_NO_TYPE_YET;
+    res->type = NEOCITIES_NO_TYPE_YET;
 
     json_object_object_foreachC(jobj, jobj_iter) {
 
         if (jobj_iter.key != NULL
             && strcmp(jobj_iter.key, "error_type") == 0) {
 
+            res->type = NEOCITIES_ERROR_STRUCT;
+            res->data.error.type = UNSUPPORTED_ERROR;
+
+            if (json_object_get_type(jobj_iter.val) != json_type_string)
+                return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+
             tmp_string = json_object_get_string(jobj_iter.val);
 
             if (tmp_string != NULL && strcmp(tmp_string,
                                              "site_not_found") == 0)
-
                 res->data.error.type = SITE_NOT_FOUND;
-
-            else
-
-                res->data.error.type = UNSUPPORTED_ERROR;
-
 
         } else if (jobj_iter.key != NULL
                    && strcmp(jobj_iter.key, "result") == 0) {
@@ -391,26 +437,21 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
             else
                 seen_result = 1;
 
+            if (json_object_get_type(jobj_iter.val) != json_type_string)
+                return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+
             tmp_string = json_object_get_string(jobj_iter.val);
 
-            if (tmp_string != NULL && strcmp
-                (json_object_get_string(jobj_iter.val), "success") != 0) {
-
+            if (tmp_string != NULL && strcmp(tmp_string, "success") != 0)
                 res->result = -1;
-
-                continue;
-
-            } else {
-
+            else
                 res->result = 0;
-
-            }
 
         } else if (jobj_iter.key != NULL
                    && strcmp(jobj_iter.key, "info") == 0
-                   && current_type == NEOCITIES_NO_TYPE_YET) {
+                   && res->type == NEOCITIES_NO_TYPE_YET) {
 
-            current_type = NEOCITIES_INFO_STRUCT;
+            res->type = NEOCITIES_INFO_STRUCT;
 
             res->data.info.sitename = NULL;
             res->data.info.views = -1;
@@ -420,19 +461,34 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
             res->data.info.domain = NULL;
             res->data.info.tags[0] = NULL;
 
+            if (json_object_get_type(jobj_iter.val) != json_type_object)
+                return NEOCITIES_LLVL_ERR_EXPECTED_OBJECT;
+
             json_object_object_foreachC(jobj_iter.val, jobj_iter_info) {
 
                 if (strcmp(jobj_iter_info.key, "views") == 0) {
+
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_int)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_INT;
 
                     res->data.info.views =
                         json_object_get_int(jobj_iter_info.val);
 
                 } else if (strcmp(jobj_iter_info.key, "hits") == 0) {
 
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_int)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_INT;
+
                     res->data.info.hits =
                         json_object_get_int(jobj_iter_info.val);
 
                 } else if (strcmp(jobj_iter_info.key, "sitename") == 0) {
+
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_string)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
                     res->data.info.sitename =
                         strdup(json_object_get_string(jobj_iter_info.val));
@@ -441,6 +497,12 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         return NEOCITIES_LLVL_ERR_MALLOC_FAIL;
 
                 } else if (strcmp(jobj_iter_info.key, "domain") == 0) {
+
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_string
+                        && json_object_get_type(jobj_iter_info.val) !=
+                        json_type_null)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING_OR_NULL;
 
                     tmp_string =
                         json_object_get_string(jobj_iter_info.val);
@@ -454,6 +516,10 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
                 } else if (strcmp(jobj_iter_info.key, "created_at") == 0) {
 
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_string)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+
                     tmp_string = json_object_get_string
                         (jobj_iter_info.val);
 
@@ -461,6 +527,10 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                                        &res->data.info.created_at, true);
 
                 } else if (strcmp(jobj_iter_info.key, "last_updated") == 0) {
+
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_string)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
                     tmp_string = json_object_get_string
                         (jobj_iter_info.val);
@@ -470,11 +540,19 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
                 } else if (strcmp(jobj_iter_info.key, "tags") == 0) {
 
+                    if (json_object_get_type
+                        (jobj_iter_info.val) != json_type_array)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_ARRAY;
+
                     tmp_array = json_object_get_array(jobj_iter_info.val);
 
                     i = 0;
 
                     for (; i < tmp_array->length; i++) {
+
+                        if (json_object_get_type
+                            (((tmp_array->array)[i])) != json_type_string)
+                            return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
                         res->data.info.tags[i] =
                             strdup(json_object_get_string
@@ -491,15 +569,19 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
             }
 
-            break;
+            //break;
 
         } else if (strcmp(jobj_iter.key, "files") == 0
-                   && current_type == NEOCITIES_NO_TYPE_YET) {
+                   && res->type == NEOCITIES_NO_TYPE_YET) {
 
-            current_type = NEOCITIES_LIST_STRUCT;
+            res->type = NEOCITIES_LIST_STRUCT;
 
             res->data.list.files = NULL;
             res->data.list.length = 0;
+
+            if (json_object_get_type(jobj_iter.val) != json_type_array)
+                return NEOCITIES_LLVL_ERR_EXPECTED_ARRAY;
+
             res->data.list.length =
                 json_object_array_length(jobj_iter.val);
 
@@ -524,6 +606,10 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
                     if (strcmp(jobj_iter_list.key, "path") == 0) {
 
+                        if (json_object_get_type
+                            (jobj_iter_list.val) != json_type_string)
+                            return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+
                         (res->data.list.files)[i].path =
                             strdup(json_object_get_string
                                    (jobj_iter_list.val));
@@ -531,12 +617,18 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         if ((res->data.list.files)[i].path == NULL)
                             return NEOCITIES_LLVL_ERR_MALLOC_FAIL;
 
-
                     } else if (strcmp(jobj_iter_list.key, "updated_at") ==
                                0) {
 
+                        if (json_object_get_type
+                            (jobj_iter_list.val) != json_type_string)
+                            return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+
                         tmp_string = json_object_get_string
                             (jobj_iter_list.val);
+
+                        if (tmp_string == NULL)
+                            continue;
 
                         rfc5322_date_parse(tmp_string, strlen(tmp_string),
                                            &(res->data.list.files)[i].
@@ -544,28 +636,37 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
                     } else if (strcmp(jobj_iter_list.key, "size") == 0) {
 
+                        if (json_object_get_type
+                            (jobj_iter_list.val) != json_type_int)
+                            return NEOCITIES_LLVL_ERR_EXPECTED_INT;
+
                         (res->data.list.files)[i].size =
                             json_object_get_int(jobj_iter_list.val);
 
                     } else if (strcmp(jobj_iter_list.key, "is_directory")
                                == 0) {
 
+                        if (json_object_get_type
+                            (jobj_iter_list.val) != json_type_boolean)
+                            return NEOCITIES_LLVL_ERR_EXPECTED_BOOL;
+
+                        /* TRUE is defined by libjson-c */
                         (res->data.list.files)[i].is_directory =
                             (json_object_get_boolean(jobj_iter_list.val) ==
                              TRUE ? 1 : 0);
 
-                    } else {
-
-                        /* ignore ipfs thing */
-
-                        continue;
                     }
+
+                    /*else {
+
+                       return NEOCITIES_LLVL_ERR_UNSUPPORTED_JSON;
+
+                       } */
 
                 }
 
             }
 
-            break;
         } else {
 
             if (res->result == 0)       // UPLOAD
@@ -580,9 +681,22 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
     return NEOCITIES_LLVL_OK;
 }
 
+enum neocities_res_data action_to_res_data_type(enum neocities_action
+                                                action)
+{
+    switch (action) {
+    case upload:
+        return NEOCITIES_NO_TYPE_YET;
+    case list:
+        return NEOCITIES_LIST_STRUCT;
+    case info:
+        return NEOCITIES_INFO_STRUCT;
+    }
+}
+
 enum neocities_low_level_error neocities_api_ex(const char *apikey,
-                                                const char *action,
-                                                const char *params,
+                                                enum neocities_action
+                                                action, const char *params,
                                                 neocities_res * res)
 {
     int err;
@@ -595,6 +709,9 @@ enum neocities_low_level_error neocities_api_ex(const char *apikey,
         return err;
 
     err = neocities_json_to_struct(jobj, res);
+
+    if (res->type != action_to_res_data_type(action))
+        return NEOCITIES_LLVL_ERR_RECEIVED_SOMETHING_ELSE;
 
     json_object_put(jobj);
 
