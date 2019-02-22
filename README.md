@@ -13,3 +13,5 @@
 ## special thanks
 
 Partha Susarla, author of `dtparser.*`
+
+See copyright notice in those files.
