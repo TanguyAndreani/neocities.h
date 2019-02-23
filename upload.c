@@ -8,6 +8,7 @@
 #include "dtparser.h"
 
 #include "neocities.h"
+#include "print_error_msg.h"
 
 #define CURL_ERROR NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT
 #define OK NEOCITIES_LLVL_OK
@@ -25,6 +26,9 @@ int main(int argc, char *argv[])
            ./some-utf8-character/file is valid
            ./dir/some-utf8-character is invalid
 
+           by libcurl design, it will default to
+           sendfile
+
            after the last /, filename should be [a-zA-Z\.]+
          */
 
@@ -35,10 +39,15 @@ int main(int argc, char *argv[])
     if (curl_global_init(CURL_GLOBAL_SSL) != 0)
         return CURL_ERROR;
 
-    if ((err = neocities_api_ex(APIKEY, upload, argv[1], &res)) != OK)
+    if ((err = neocities_api_ex(APIKEY, upload, argv[1], &res)) != OK
+        || res.result != 0) {
+        neocities_print_error_message(err);
+        if (res.type == NEOCITIES_ERROR_STRUCT)
+            fprintf(stderr, "error_type: %d\n", res.data.error.type);
         return err;
+    }
 
-    // neocities_destroy(&res);
+    //neocities_destroy(&res);
 
     curl_global_cleanup();
 

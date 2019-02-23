@@ -8,6 +8,7 @@
 #include "dtparser.h"
 
 #include "neocities.h"
+#include "print_error_msg.h"
 
 #define CURL_ERROR NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT
 #define OK NEOCITIES_LLVL_OK
@@ -30,8 +31,14 @@ int main(int argc, char *argv[])
 
     if ((err =
          neocities_api_ex(APIKEY, list, (argc == 2) ? argv[1] : "",
-                          &res)) != OK)
+                          &res)) != OK || res.result != 0) {
+        neocities_print_error_message(err);
+        if (res.type == NEOCITIES_ERROR_STRUCT)
+            fprintf(stderr, "error_type: %d\n", res.data.error.type);
+        else
+            neocities_destroy(&res);
         return err;
+    }
 
     for (i = 0; i < res.data.list.length; i++) {
         printf("%s", res.data.list.files[i].path);

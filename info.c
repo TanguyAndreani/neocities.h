@@ -8,6 +8,7 @@
 #include "dtparser.h"
 
 #include "neocities.h"
+#include "print_error_msg.h"
 
 #define CURL_ERROR NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT
 #define OK NEOCITIES_LLVL_OK
@@ -31,8 +32,14 @@ int main(int argc, char *argv[])
 
     if ((err =
          neocities_api_ex(APIKEY, info, ((argc == 1) ? "" : argv[1]),
-                          &res)) != OK)
+                          &res)) != OK || res.result != 0) {
+        neocities_print_error_message(err);
+        if (res.type == NEOCITIES_ERROR_STRUCT)
+            fprintf(stderr, "error_type: %d\n", res.data.error.type);
+        else
+            neocities_destroy(&res);
         return err;
+    }
 
     if (res.data.info.sitename != NULL)
         printf("sitename     %s\n", res.data.info.sitename);
@@ -40,7 +47,7 @@ int main(int argc, char *argv[])
     if (res.data.info.views != -1)
         printf("views        %d\n", res.data.info.views);
 
-    if (res.data.info.views != -1)
+    if (res.data.info.hits != -1)
         printf("hits         %d\n", res.data.info.hits);
 
     if (res.data.info.created_at != 0) {

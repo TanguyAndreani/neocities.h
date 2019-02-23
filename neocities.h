@@ -3,6 +3,11 @@
 
 #include "apikey.h"
 
+/*
+ * the following constants are not to be used elsewhere than in this 
+ * file.
+ */
+
 #define BASEURL "https://neocities.org/api/"
 
 /* POST */
@@ -14,6 +19,7 @@
 #define INFO BASEURL "info"
 #define KEY  BASEURL "key"
 
+/* to use with neocities_api[_ex] */
 enum neocities_action {
     upload,
     delete,
@@ -22,9 +28,18 @@ enum neocities_action {
     key
 };
 
+/* this stands for LOW LEVEL ERROR */
+
 enum neocities_low_level_error {
     NEOCITIES_LLVL_OK,
+
     NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT,
+
+    /*
+     * the following members are not to be used elsewhere than in this 
+     * file; you can throw them in neocities_print_error_message().
+     */
+
     NEOCITIES_LLVL_ERR_JSON_TOKENER_NEW,
     NEOCITIES_LLVL_ERR_CURL_EASY_INIT,
     NEOCITIES_LLVL_ERR_CURL_MIME_INIT,
@@ -34,14 +49,13 @@ enum neocities_low_level_error {
     NEOCITIES_LLVL_ERR_CURL_MIME_DATA,
     NEOCITIES_LLVL_ERR_CURL_SLIST_APPEND,
     NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT,
+    NEOCITIES_LLVL_ERR_CURL_EASY_PERFORM,
     NEOCITIES_LLVL_ERR_UNSUPPORTED_DELETE,
     NEOCITIES_LLVL_ERR_BAD_ACTION,
-    NEOCITIES_LLVL_ERR_NEOCITIES_INIT,
-    NEOCITIES_LLVL_ERR_CURL_EASY_PERFORM,
+    NEOCITIES_LLVL_ERR_CURL_BUF_INIT,
     NEOCITIES_LLVL_ERR_JSON_TOKENER_PARSE,
     NEOCITIES_LLVL_ERR_RECEIVED_UNSUPPORTED_JSON,
     NEOCITIES_LLVL_ERR_RECEIVED_INVALID_JSON,
-    NEOCITIES_LLVL_ERR_NO_SUCCESS,
     NEOCITIES_LLVL_ERR_MALLOC_FAIL,
     NEOCITIES_LLVL_ERR_EXPECTED_STRING,
     NEOCITIES_LLVL_ERR_EXPECTED_BOOL,
@@ -52,18 +66,11 @@ enum neocities_low_level_error {
     NEOCITIES_LLVL_ERR_RECEIVED_SOMETHING_ELSE
 };
 
-/* Not prefixed for convenience */
-enum neocities_api_level_error {
-    SITE_NOT_FOUND,
-    UNSUPPORTED_ERROR
-};
-
-typedef struct curl_buffer_ {
-    char *buf;
-
-    int size;
-    int pos;
-} curl_buffer;
+/*
+ * neocities_*_ are structs that holds all the useful data
+ *
+ * see neocities_res for a more general type
+ */
 
 struct neocities_info_ {
     char *sitename;             /* default: NULL */
@@ -89,9 +96,23 @@ struct neocities_file_ {
     time_t updated_at;
 };
 
-struct neocities_error_ {
-    int type;
+/*
+ * you might want to use those in your code
+ */
+
+enum neocities_api_level_error {
+    SITE_NOT_FOUND,
+    UNSUPPORTED_ERROR
 };
+
+struct neocities_error_ {
+    enum neocities_api_level_error type;
+};
+
+/*
+ * NEOCITIES_NO_TYPE_YET works for successful request that didn't have an
+ * info or list field such as the upload call
+ */
 
 enum neocities_res_data {
     NEOCITIES_NO_TYPE_YET,
@@ -110,6 +131,17 @@ typedef struct neocities_res_ {
         struct neocities_error_ error;
     } data;
 } neocities_res;
+
+/*
+ * this is an internal structure that shouldn't be used elsewhere.
+ */
+
+typedef struct curl_buffer_ {
+    char *buf;
+
+    int size;
+    int pos;
+} curl_buffer;
 
 int curl_buffer_init(curl_buffer * curl_buf, size_t size)
 {
@@ -174,6 +206,10 @@ size_t write_data(void *buffer, size_t size, size_t nmemb,
     return i;
 }
 
+/*
+ * perform an api call and parse the resulting json into a json_object
+ */
+
 enum neocities_low_level_error neocities_api(const char *apikey,
                                              enum neocities_action action,
                                              const char *params,
@@ -229,9 +265,10 @@ enum neocities_low_level_error neocities_api(const char *apikey,
         if (curl_mime_name(field, "filename") != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_MIME_NAME;
 
-        if (curl_mime_data(field, params, CURL_ZERO_TERMINATED) !=
-            CURLE_OK)
+        if (curl_mime_data(field, params, CURL_ZERO_TERMINATED) != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_MIME_DATA;
+
+        /* filename default to sendfile when invalid */
 
         field = NULL;
 
@@ -285,7 +322,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     }
 
     if (curl_buffer_init(&curl_buf, 700) != 0)
-        return NEOCITIES_LLVL_ERR_NEOCITIES_INIT;
+        return NEOCITIES_LLVL_ERR_CURL_BUF_INIT;
 
     headers = curl_slist_append(headers, auth_bearer);
 
@@ -295,8 +332,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     if (curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers) != CURLE_OK)
         return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
-    if (curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data) !=
-        CURLE_OK)
+    if (curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data) != CURLE_OK)
         return NEOCITIES_LLVL_ERR_CURL_EASY_SETOPT;
 
     if (curl_easy_setopt
@@ -310,8 +346,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
     curl_mime_free(form);
     curl_easy_cleanup(curl);
 
-    *jobj =
-        json_tokener_parse_ex(tok, (char *) curl_buf.buf, curl_buf.pos);
+    *jobj = json_tokener_parse_ex(tok, (char *) curl_buf.buf, curl_buf.pos);
 
     /* https://groups.google.com/forum/#!topic/json-c/CMvkXKXqtWs */
     if (tok->char_offset != curl_buf.pos) {
@@ -330,10 +365,14 @@ enum neocities_low_level_error neocities_api(const char *apikey,
         return NEOCITIES_LLVL_ERR_JSON_TOKENER_PARSE;
 
     if (json_object_get_type(*jobj) != json_type_object)
-        return NEOCITIES_LLVL_ERR_RECEIVED_UNSUPPORTED_JSON;
+        return NEOCITIES_LLVL_ERR_EXPECTED_OBJECT;
 
     return NEOCITIES_LLVL_OK;
 }
+
+/*
+ * those are functions used by neocities_destroy()
+ */
 
 void neocities_destroy_list(neocities_res * res)
 {
@@ -373,6 +412,10 @@ void neocities_destroy_error(neocities_res * res)
     return;
 }
 
+/*
+ * you should use this to free memory AND reset values to their defaults
+ */
+
 void neocities_destroy(neocities_res * res)
 {
 
@@ -395,9 +438,18 @@ void neocities_destroy(neocities_res * res)
     return;
 }
 
+/*
+ * i took the guess approach here, this function determines which type
+ * is the most likely and tries to fill res fields as much as possible
+ *
+ * fields are reset to their default values as soon as the type is
+ * recognized
+ *
+ * the function will exit in case their is a type error in the json
+ */
+
 enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
-                                                        neocities_res *
-                                                        res)
+                                                        neocities_res * res)
 {
 
     json_object_iter jobj_iter, jobj_iter_info, jobj_iter_list;
@@ -414,9 +466,9 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
     json_object_object_foreachC(jobj, jobj_iter) {
 
-        if (jobj_iter.key != NULL
-            && strcmp(jobj_iter.key, "error_type") == 0) {
+        if (jobj_iter.key != NULL && strcmp(jobj_iter.key, "error_type") == 0) {
 
+            res->result = -1; // in case wasn't sent in usual order
             res->type = NEOCITIES_ERROR_STRUCT;
             res->data.error.type = UNSUPPORTED_ERROR;
 
@@ -428,6 +480,8 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
             if (tmp_string != NULL && strcmp(tmp_string,
                                              "site_not_found") == 0)
                 res->data.error.type = SITE_NOT_FOUND;
+
+            break;
 
         } else if (jobj_iter.key != NULL
                    && strcmp(jobj_iter.key, "result") == 0) {
@@ -504,8 +558,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         json_type_null)
                         return NEOCITIES_LLVL_ERR_EXPECTED_STRING_OR_NULL;
 
-                    tmp_string =
-                        json_object_get_string(jobj_iter_info.val);
+                    tmp_string = json_object_get_string(jobj_iter_info.val);
 
                     if (tmp_string != NULL) {
                         res->data.info.domain = strdup(tmp_string);
@@ -520,8 +573,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         (jobj_iter_info.val) != json_type_string)
                         return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
-                    tmp_string = json_object_get_string
-                        (jobj_iter_info.val);
+                    tmp_string = json_object_get_string(jobj_iter_info.val);
 
                     rfc5322_date_parse(tmp_string, strlen(tmp_string),
                                        &res->data.info.created_at, true);
@@ -532,8 +584,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         (jobj_iter_info.val) != json_type_string)
                         return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
-                    tmp_string = json_object_get_string
-                        (jobj_iter_info.val);
+                    tmp_string = json_object_get_string(jobj_iter_info.val);
 
                     rfc5322_date_parse(tmp_string, strlen(tmp_string),
                                        &res->data.info.last_updated, true);
@@ -569,7 +620,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
             }
 
-            //break;
+            break;
 
         } else if (strcmp(jobj_iter.key, "files") == 0
                    && res->type == NEOCITIES_NO_TYPE_YET) {
@@ -582,12 +633,10 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
             if (json_object_get_type(jobj_iter.val) != json_type_array)
                 return NEOCITIES_LLVL_ERR_EXPECTED_ARRAY;
 
-            res->data.list.length =
-                json_object_array_length(jobj_iter.val);
+            res->data.list.length = json_object_array_length(jobj_iter.val);
 
             res->data.list.files =
-                malloc(sizeof(struct neocities_file_) *
-                       res->data.list.length);
+                malloc(sizeof(struct neocities_file_) * res->data.list.length);
 
             if (res->data.list.files == NULL)
                 return NEOCITIES_LLVL_ERR_MALLOC_FAIL;
@@ -611,14 +660,12 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                             return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
 
                         (res->data.list.files)[i].path =
-                            strdup(json_object_get_string
-                                   (jobj_iter_list.val));
+                            strdup(json_object_get_string(jobj_iter_list.val));
 
                         if ((res->data.list.files)[i].path == NULL)
                             return NEOCITIES_LLVL_ERR_MALLOC_FAIL;
 
-                    } else if (strcmp(jobj_iter_list.key, "updated_at") ==
-                               0) {
+                    } else if (strcmp(jobj_iter_list.key, "updated_at") == 0) {
 
                         if (json_object_get_type
                             (jobj_iter_list.val) != json_type_string)
@@ -631,8 +678,8 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                             continue;
 
                         rfc5322_date_parse(tmp_string, strlen(tmp_string),
-                                           &(res->data.list.files)[i].
-                                           updated_at, true);
+                                           &(res->data.list.
+                                             files)[i].updated_at, true);
 
                     } else if (strcmp(jobj_iter_list.key, "size") == 0) {
 
@@ -667,13 +714,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
             }
 
-        } else {
-
-            if (res->result == 0)       // UPLOAD
-
-                return NEOCITIES_LLVL_OK;
-
-            return NEOCITIES_LLVL_ERR_RECEIVED_UNSUPPORTED_JSON;
+            break;
 
         }
     }
@@ -681,8 +722,9 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
     return NEOCITIES_LLVL_OK;
 }
 
-enum neocities_res_data action_to_res_data_type(enum neocities_action
-                                                action)
+/* simple function used for convenience */
+
+enum neocities_res_data action_to_res_data_type(enum neocities_action action)
 {
     switch (action) {
     case upload:
@@ -694,6 +736,8 @@ enum neocities_res_data action_to_res_data_type(enum neocities_action
     }
 }
 
+/* the function you probably looked for */
+
 enum neocities_low_level_error neocities_api_ex(const char *apikey,
                                                 enum neocities_action
                                                 action, const char *params,
@@ -704,13 +748,12 @@ enum neocities_low_level_error neocities_api_ex(const char *apikey,
     json_object *jobj = NULL;
 
     if ((err =
-         neocities_api(apikey, action, params,
-                       &jobj)) != NEOCITIES_LLVL_OK)
+         neocities_api(apikey, action, params, &jobj)) != NEOCITIES_LLVL_OK)
         return err;
 
     err = neocities_json_to_struct(jobj, res);
 
-    if (res->type != action_to_res_data_type(action))
+    if (res->result == 0 && res->type != action_to_res_data_type(action))
         return NEOCITIES_LLVL_ERR_RECEIVED_SOMETHING_ELSE;
 
     json_object_put(jobj);
