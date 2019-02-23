@@ -468,7 +468,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
 
         if (jobj_iter.key != NULL && strcmp(jobj_iter.key, "error_type") == 0) {
 
-            res->result = -1; // in case wasn't sent in usual order
+            res->result = -1;   // in case wasn't sent in usual order
             res->type = NEOCITIES_ERROR_STRUCT;
             res->data.error.type = UNSUPPORTED_ERROR;
 
@@ -581,13 +581,16 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                 } else if (strcmp(jobj_iter_info.key, "last_updated") == 0) {
 
                     if (json_object_get_type
-                        (jobj_iter_info.val) != json_type_string)
-                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING;
+                        (jobj_iter_info.val) != json_type_string
+                        && json_object_get_type(jobj_iter_info.val) !=
+                        json_type_null)
+                        return NEOCITIES_LLVL_ERR_EXPECTED_STRING_OR_NULL;
 
                     tmp_string = json_object_get_string(jobj_iter_info.val);
 
-                    rfc5322_date_parse(tmp_string, strlen(tmp_string),
-                                       &res->data.info.last_updated, true);
+                    if (tmp_string != NULL)
+                        rfc5322_date_parse(tmp_string, strlen(tmp_string),
+                                           &res->data.info.last_updated, true);
 
                 } else if (strcmp(jobj_iter_info.key, "tags") == 0) {
 
@@ -678,8 +681,8 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                             continue;
 
                         rfc5322_date_parse(tmp_string, strlen(tmp_string),
-                                           &(res->data.list.
-                                             files)[i].updated_at, true);
+                                           &(res->data.list.files)[i].
+                                           updated_at, true);
 
                     } else if (strcmp(jobj_iter_list.key, "size") == 0) {
 
