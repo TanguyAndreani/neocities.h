@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
         || res.result != 0) {
         neocities_print_error_message(err);
         if (res.type == NEOCITIES_ERROR_STRUCT)
-            fprintf(stderr, "error_type: %d\n", res.data.error.type);
+            neocities_print_error_message_api(res.data.error.type);
         return err;
     }
 

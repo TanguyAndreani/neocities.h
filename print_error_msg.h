@@ -1,4 +1,6 @@
-#define M(m) fprintf(stderr, "error %d: " m, err); break
+#define M(m) \
+  fprintf(stderr, "error %d: " m, err); \
+  break
 
 void neocities_print_error_message(enum neocities_low_level_error err)
 {
@@ -50,8 +52,26 @@ void neocities_print_error_message(enum neocities_low_level_error err)
     case NEOCITIES_LLVL_ERR_RECEIVED_SOMETHING_ELSE:
         M("the type guessed by neocities_json_to_struct() doesn't match"
           " with the request that was made");
+    default:
+        return;
     }
 
+    fputc('\n', stderr);
+
+    return;
+}
+
+void neocities_print_error_message_api(enum neocities_api_level_error err)
+{
+    switch (err) {
+
+    case SITE_NOT_FOUND:
+        M("site not found");
+    case UNSUPPORTED_ERROR:
+        M("unknow (yet) error");
+    default:
+        return;
+    }
     fputc('\n', stderr);
 
     return;
