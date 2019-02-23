@@ -1,5 +1,7 @@
 # neocities.h
 
+    cp apikey.h.example apikey.h
+    # edit apikey.h
     make
     ./info soykaf
     ./upload somefile
