@@ -1,0 +1,31 @@
+neocities.h
+===========
+
+dependencies
+------------
+
+    * libcurl-dev
+    * libjson-c-dev
+
+build
+-----
+
+    cp apikey.h.example apikey.h
+    make
+
+use
+---
+
+    ./info [sitename]
+    ./upload filename
+    ./list [filetype]
+
+        where [xxx] are optional parameters
+
+special thanks
+--------------
+
+    Partha Susarla, author of `dtparser.*`
+    ------ -------
+
+    See copyright notice in those files.
