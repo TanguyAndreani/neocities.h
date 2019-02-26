@@ -10,8 +10,7 @@
 #include "neocities.h"
 #include "print_error_msg.h"
 
-#define CURL_ERROR NEOCITIES_LLVL_ERR_CURL_GLOBAL_INIT
-#define OK NEOCITIES_LLVL_OK
+#include "apikey.h"
 
 int main(int argc, char *argv[])
 {
@@ -26,14 +25,14 @@ int main(int argc, char *argv[])
         exit(200);              // no enum member share this number
     }
 
-    if (curl_global_init(CURL_GLOBAL_SSL) != 0)
-        return CURL_ERROR;
+    if ((err = neocities_global_init()) != 0)
+        return err;
 
     if ((err =
          neocities_api_ex(APIKEY, list, (argc == 2) ? argv[1] : "",
-                          &res)) != OK || res.result != 0) {
+                          &res)) != 0 || res.result == -1) {
         neocities_print_error_message(err);
-        if (res.type == NEOCITIES_ERROR_STRUCT)
+        if (res.type == -1)     // reserved for errors
             neocities_print_error_message(res.data.error.type);
         else
             neocities_destroy(&res);
