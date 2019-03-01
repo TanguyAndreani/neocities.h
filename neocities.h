@@ -259,13 +259,15 @@ enum neocities_low_level_error neocities_api(const char *apikey,
         if (field == NULL)
             return NEOCITIES_LLVL_ERR_CURL_MIME_ADDPART;
 
-        if (curl_mime_name(field, "sendfile") != CURLE_OK)
+        if (curl_mime_name(field, params) != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_MIME_NAME;
 
         if (curl_mime_filedata(field, params) != CURLE_OK)
             return NEOCITIES_LLVL_ERR_CURL_MIME_FILEDATA;
 
-        field = curl_mime_addpart(form);
+        /* seems useless :( */
+
+        /*field = curl_mime_addpart(form);
 
         if (field == NULL)
             return NEOCITIES_LLVL_ERR_CURL_MIME_ADDPART;
@@ -274,9 +276,7 @@ enum neocities_low_level_error neocities_api(const char *apikey,
             return NEOCITIES_LLVL_ERR_CURL_MIME_NAME;
 
         if (curl_mime_data(field, params, CURL_ZERO_TERMINATED) != CURLE_OK)
-            return NEOCITIES_LLVL_ERR_CURL_MIME_DATA;
-
-        /* filename default to sendfile when invalid */
+            return NEOCITIES_LLVL_ERR_CURL_MIME_DATA;*/
 
         field = NULL;
 
