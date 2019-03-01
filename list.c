@@ -39,12 +39,20 @@ int main(int argc, char *argv[])
         return err;
     }
 
+#define has_blanks(s) \
+    strchr(s, ' ') != NULL
+
     for (i = 0; i < res.data.list.length; i++) {
-        printf("%s", res.data.list.files[i].path);
+        if (has_blanks(res.data.list.files[i].path))
+            printf("'%s'", res.data.list.files[i].path);
+        else
+            printf("%s", res.data.list.files[i].path);
         if (res.data.list.files[i].is_directory == 1)
             putchar('/');
         putchar('\n');
     }
+
+#undef has_blanks
 
     neocities_destroy(&res);
 
