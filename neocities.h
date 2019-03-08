@@ -766,7 +766,7 @@ enum neocities_low_level_error neocities_json_to_struct(json_object * jobj,
                         /* TRUE is defined by libjson-c */
                         (res->data.list.files)[i].is_directory =
                             (json_object_get_boolean(jobj_iter_list.val) ==
-                             TRUE ? 1 : 0);
+                             ((json_bool)1) ? 1 : 0);
 
                         }
 
