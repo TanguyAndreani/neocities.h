@@ -1,5 +1,5 @@
 CC=gcc # clang
-FLAGS=-lcurl -ljson-c -I/usr/include/json-c
+FLAGS=-lcurl -ljson-c -I/usr/local/include/json-c
 DEBUG=-g -DNEOCITIES_DEBUG
 
 all: info list upload
